@@ -6,6 +6,7 @@ import FlowGraph from './components/FlowGraph';
 function App() {
   return (
     <div className="App">
+      <h1>图标测试</h1>
       <FlowGraph></FlowGraph>
     </div>
   );
