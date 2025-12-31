@@ -154,10 +154,7 @@ export default function FlowGraph() {
             // apply style if provided via update
             if (payload.style) {
                 // try to update node style via updateNode
-                lf.updateNode({
-                    ...base,
-                    properties: { style: payload.style },
-                });
+                lf.setProperties(base.id, { style: payload.style });
             }
         } catch (err) {
             // fallback: add rect node
