@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react'
+ import React, { useEffect, useRef } from 'react'
 import { Graph } from '@antv/x6'
 
 // /e:/Code/logicflow/demo-02-antvx6/src/components/Graph.jsx
@@ -13,7 +13,7 @@ export default function GraphComponent() {
         const graph = new Graph({
             container: containerRef.current,
             grid: true,
-            panning: { enabled: true },
+            panning: { enabled: true }, 
             mousewheel: { enabled: false },
             background: { color: '#fafafa' },
             connecting: {
