@@ -1,12 +1,15 @@
-import React, { useRef } from "react";
+import React, { useRef, useState } from "react";
 import LogicFlow from "@logicflow/core";
 import {
   CircleNode,
   CircleNodeModel,
   RectNode,
   RectNodeModel,
+  PolygonNode,
+  PolygonNodeModel,
   h,
 } from "@logicflow/core";
+import { PolylineEdge, PolylineEdgeModel } from '@logicflow/core';
 import { BPMNAdapter } from "@logicflow/extension";
 import "@logicflow/core/dist/index.css";
 
@@ -38,16 +41,16 @@ class EndNodeModel extends CircleNodeModel {
   }
 }
 
-// 任务节点模型
-class TaskNodeModel extends RectNodeModel {
+// 自定义用户任务节点 - 矩形
+class UserTaskNodeModel extends RectNodeModel {
   setAttributes() {
     const width = 140;
     const height = 100;
     
     this.width = width;
     this.height = height;
-    this.stroke = '#fb923c';
-    this.fill = '#fff7ed';
+    this.stroke = '#10b981';
+    this.fill = '#ecfdf5';
     
     // 设置锚点偏移，使节点可以连接
     this.anchorsOffset = [
@@ -59,8 +62,8 @@ class TaskNodeModel extends RectNodeModel {
     
     // 安全地设置默认属性，避免递归调用
     const defaultProps = {
-      title: '任务',
-      content: '',
+      title: '用户任务',
+      content: '用户任务详情',
       status: 'not-started' // 'not-started', 'processing', 'completed'
     };
     
@@ -72,8 +75,8 @@ class TaskNodeModel extends RectNodeModel {
   }
 }
 
-// 任务节点视图
-class TaskNodeView extends RectNode {
+// 用户任务节点视图
+class UserTaskNodeView extends RectNode {
   getShape() {
     // 通过 getAttributes 获取 model 中的属性
     const { 
@@ -122,7 +125,7 @@ class TaskNodeView extends RectNode {
         y: y - height / 2,
         width,
         height,
-        fill: '#fff7ed',
+        fill: '#ecfdf5',
         stroke,
         strokeWidth: 1,
         rx: 6,
@@ -135,7 +138,7 @@ class TaskNodeView extends RectNode {
         y: y - height / 2,
         width,
         height: titleHeight,
-        fill: '#fb923c',
+        fill: '#10b981',
         stroke: 'none',
         rx: 6,
         ry: 6
@@ -150,7 +153,7 @@ class TaskNodeView extends RectNode {
         fill: '#fff',
         fontWeight: 'bold',
         fontSize: 13
-      }, title || '任务'),
+      }, title || '用户任务'),
       
       // 内容区域矩形
       h("rect", {
@@ -158,7 +161,7 @@ class TaskNodeView extends RectNode {
         y: y - height / 2 + titleHeight,
         width,
         height: contentHeight,
-        fill: '#fef7ed',
+        fill: '#f0fdf4',
         stroke: 'none'
       }),
       
@@ -175,7 +178,7 @@ class TaskNodeView extends RectNode {
           textAlign: 'center',
           padding: '5px'
         }
-      }, content || ''),
+      }, content || '用户任务详情'),
       
       // 状态区域矩形
       h("rect", {
@@ -200,6 +203,92 @@ class TaskNodeView extends RectNode {
         fontWeight: 'normal'
       }, statusText)
     ]);
+  }
+}
+
+// 自定义排他网关节点 - 菱形
+class ExclusiveGatewayModel extends PolygonNodeModel {
+  setAttributes() {
+    this.points = [
+      [40, 0],
+      [0, 40],
+      [-40, 0],
+      [0, -40]
+    ];
+    this.stroke = '#8b5cf6';
+    this.fill = '#f3e8ff';
+    
+    // 设置锚点偏移
+    this.anchorsOffset = [
+      [35, 0],     // 右侧
+      [-35, 0],    // 左侧
+      [0, -35],    // 顶部
+      [0, 35]      // 底部
+    ];
+    
+    // 安全地设置默认属性
+    const defaultProps = {
+      title: '审批网关',
+      content: '排他网关'
+    };
+    
+    // 合并默认属性和传入的属性
+    this.properties = {
+      ...defaultProps,
+      ...(this.getData().properties || {})
+    };
+  }
+}
+
+class ExclusiveGatewayView extends PolygonNode {
+  getShape() {
+    const { x, y, width, height, points, fill, stroke, strokeWidth, properties } = this.props.model;
+    const { title } = properties;
+    
+    const style = this.props.model.s;
+    return h(
+      'g',
+      {},
+      [
+        h(
+          'polygon',
+          {
+            ...style,
+            points: points,
+            fill,
+            stroke,
+            strokeWidth,
+          }
+        ),
+        // 添加网关符号
+        h(
+          'text',
+          {
+            x,
+            y,
+            textAnchor: 'middle',
+            dominantBaseline: 'middle',
+            fill: '#333',
+            fontWeight: 'bold',
+            fontSize: 14
+          },
+          'X'
+        ),
+        // 添加标题
+        h(
+          'text',
+          {
+            x,
+            y: y + 30,
+            textAnchor: 'middle',
+            dominantBaseline: 'middle',
+            fill: '#333',
+            fontSize: 12
+          },
+          title || '审批网关'
+        )
+      ]
+    );
   }
 }
 
@@ -244,13 +333,12 @@ function downloadFile(filename, content, mime = "application/json") {
     URL.revokeObjectURL(url);
 }
 
-
 /* Node palette definitions (5 styles) */
 const PALETTE = [
     { type: "start-node", label: "开始", style: { fill: "#e6f7ff", stroke: "#1E90FF" }, w: 60, h: 60 },
     { type: "end-node", label: "结束", style: { fill: "#fff0f0", stroke: "#FF4500" }, w: 60, h: 60 },
-    { type: "task-node", label: "任务", style: { fill: "#fff7ed", stroke: "#fb923c" }, w: 140, h: 100 },
-    { type: "diamond", label: "判断 (菱形)", style: { fill: "#f3e8ff", stroke: "#a78bfa" }, w: 110, h: 70 },
+    { type: "user-task", label: "用户任务", style: { fill: "#ecfdf5", stroke: "#10b981" }, w: 140, h: 100 },
+    { type: "exclusive-gateway", label: "审批网关", style: { fill: "#f3e8ff", stroke: "#8b5cf6" }, w: 80, h: 80 },
     { type: "polygon", label: "多边形示例", style: { fill: "#fff1f2", stroke: "#fb7185" }, w: 120, h: 60 },
 ];
 
@@ -288,9 +376,15 @@ export default function FlowGraph() {
         });
         
         lf.register({
-          type: 'task-node',
-          view: TaskNodeView,
-          model: TaskNodeModel,
+          type: 'user-task',
+          view: UserTaskNodeView,
+          model: UserTaskNodeModel,
+        });
+        
+        lf.register({
+          type: 'exclusive-gateway',
+          view: ExclusiveGatewayView,
+          model: ExclusiveGatewayModel,
         });
 
         lfRef.current = lf;
@@ -376,6 +470,9 @@ export default function FlowGraph() {
             // 圆形节点，宽度和高度应该相等
             base.width = payload.w || 60;
             base.height = payload.w || 60; // 确保圆形节点是圆的
+        } else if(payload.type === 'exclusive-gateway') {
+            base.width = payload.w || 80;
+            base.height = payload.h || 80;
         } else {
             // 矩形节点
             base.width = payload.w || 140;
@@ -436,8 +533,289 @@ export default function FlowGraph() {
         const lf = lfRef.current;
         if (!lf) return;
         const data = lf.getGraphData ? lf.getGraphData() : lf.save();
-        // 将数据以格式化的JSON形式显示在弹窗中
-        console.log(data)
+        // 将数据以格式化的JSON形式打印到控制台
+        console.log(JSON.stringify(data, null, 2));
+    };
+
+    const handleImportBpmn = () => {
+        const lf = lfRef.current;
+        if (!lf) return;
+        
+        // 这里导入预设的请假流程BPMN内容
+        let leaveProcessBpmn = `<?xml version="1.0" encoding="UTF-8"?>
+<bpmn2:definitions 
+  xmlns:bpmn2="http://www.omg.org/spec/BPMN/20100524/MODEL"
+  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+  xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+  xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+  xmlns:flowable="http://flowable.org/bpmn"
+  targetNamespace="http://www.flowable.org/processdef">
+  
+  <bpmn2:process id="leaveProcess" name="请假流程" isExecutable="true">
+    <bpmn2:startEvent id="startEvent" name="开始"/>
+    
+    <bpmn2:userTask id="applyTask" name="提交请假申请" flowable:assignee="\${applicant}">
+      <bpmn2:extensionElements>
+        <flowable:formProperty id="leaveType" name="请假类型" type="string" required="true"/>
+        <flowable:formProperty id="reason" name="请假原因" type="string" required="true"/>
+        <flowable:formProperty id="startDate" name="开始日期" type="date" datePattern="yyyy-MM-dd" required="true"/>
+        <flowable:formProperty id="endDate" name="结束日期" type="date" datePattern="yyyy-MM-dd" required="true"/>
+      </bpmn2:extensionElements>
+    </bpmn2:userTask>
+    
+    <bpmn2:exclusiveGateway id="approvalGateway" name="审批网关"/>
+    
+    <bpmn2:userTask id="managerApprovalTask" name="经理审批" flowable:assignee="\${manager}">
+      <bpmn2:extensionElements>
+        <flowable:formProperty id="approvalResult" name="审批结果" type="enum" required="true">
+          <flowable:value id="approved" name="批准"/>
+          <flowable:value id="rejected" name="拒绝"/>
+        </flowable:formProperty>
+        <flowable:formProperty id="comments" name="审批意见" type="string"/>
+      </bpmn2:extensionElements>
+    </bpmn2:userTask>
+    
+    <bpmn2:userTask id="hrApprovalTask" name="HR审批" flowable:assignee="hr">
+      <bpmn2:extensionElements>
+        <flowable:formProperty id="hrApprovalResult" name="审批结果" type="enum" required="true">
+          <flowable:value id="approved" name="批准"/>
+          <flowable:value id="rejected" name="拒绝"/>
+        </flowable:formProperty>
+        <flowable:formProperty id="hrComments" name="审批意见" type="string"/>
+      </bpmn2:extensionElements>
+    </bpmn2:userTask>
+    
+    <bpmn2:endEvent id="endEvent" name="结束"/>
+    
+    <bpmn2:sequenceFlow id="flow1" sourceRef="startEvent" targetRef="applyTask"/>
+    <bpmn2:sequenceFlow id="flow2" sourceRef="applyTask" targetRef="approvalGateway"/>
+    <bpmn2:sequenceFlow id="flow3" sourceRef="approvalGateway" targetRef="managerApprovalTask">
+      <bpmn2:conditionExpression>3</bpmn2:conditionExpression>
+    </bpmn2:sequenceFlow>
+    <bpmn2:sequenceFlow id="flow4" sourceRef="approvalGateway" targetRef="hrApprovalTask">
+      <bpmn2:conditionExpression>3</bpmn2:conditionExpression>
+    </bpmn2:sequenceFlow>
+    <bpmn2:sequenceFlow id="flow5" sourceRef="managerApprovalTask" targetRef="endEvent"/>
+    <bpmn2:sequenceFlow id="flow6" sourceRef="hrApprovalTask" targetRef="endEvent"/>
+  </bpmn2:process>
+  
+  <bpmndi:BPMNDiagram id="BPMNDiagram_leaveProcess">
+    <bpmndi:BPMNPlane bpmnElement="leaveProcess" id="BPMNPlane_leaveProcess">
+      <bpmndi:BPMNShape bpmnElement="startEvent" id="BPMNShape_startEvent">
+        <dc:Bounds height="30.0" width="30.0" x="100.0" y="150.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape bpmnElement="applyTask" id="BPMNShape_applyTask">
+        <dc:Bounds height="80.0" width="100.0" x="180.0" y="125.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape bpmnElement="approvalGateway" id="BPMNShape_approvalGateway">
+        <dc:Bounds height="40.0" width="40.0" x="330.0" y="145.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape bpmnElement="managerApprovalTask" id="BPMNShape_managerApprovalTask">
+        <dc:Bounds height="80.0" width="100.0" x="200.0" y="250.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape bpmnElement="hrApprovalTask" id="BPMNShape_hrApprovalTask">
+        <dc:Bounds height="80.0" width="100.0" x="420.0" y="125.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape bpmnElement="endEvent" id="BPMNShape_endEvent">
+        <dc:Bounds height="28.0" width="28.0" x="570.0" y="151.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge bpmnElement="flow1" id="BPMNEdge_flow1">
+        <di:waypoint x="130.0" y="165.0"/>
+        <di:waypoint x="180.0" y="165.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge bpmnElement="flow2" id="BPMNEdge_flow2">
+        <di:waypoint x="280.0" y="165.0"/>
+        <di:waypoint x="330.0" y="165.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge bpmnElement="flow3" id="BPMNEdge_flow3">
+        <di:waypoint x="350.0" y="165.0"/>
+        <di:waypoint x="350.0" y="290.0"/>
+        <di:waypoint x="250.0" y="290.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge bpmnElement="flow4" id="BPMNEdge_flow4">
+        <di:waypoint x="370.0" y="165.0"/>
+        <di:waypoint x="470.0" y="165.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge bpmnElement="flow5" id="BPMNEdge_flow5">
+        <di:waypoint x="250.0" y="250.0"/>
+        <di:waypoint x="250.0" y="165.0"/>
+        <di:waypoint x="570.0" y="165.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge bpmnElement="flow6" id="BPMNEdge_flow6">
+        <di:waypoint x="520.0" y="165.0"/>
+        <di:waypoint x="570.0" y="165.0"/>
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn2:definitions>`;
+
+        // 更精确地预处理BPMN XML，只替换标签和属性中的命名空间前缀
+        // 1. 先转义特殊字符（在引号内的内容）
+        leaveProcessBpmn = leaveProcessBpmn.replace(/\$\{([^}]+)\}/g, '{$1}');
+        
+        // 2. 替换开始标签中的命名空间前缀
+        leaveProcessBpmn = leaveProcessBpmn.replace(/<(\w+):([\w\-]+)/g, '<$2');
+        
+        // 3. 替换结束标签中的命名空间前缀
+        leaveProcessBpmn = leaveProcessBpmn.replace(/<\/(\w+):([\w\-]+)/g, '</$2');
+        
+        // 4. 替换属性中的命名空间前缀（注意不能影响属性值中的{}内容）
+        leaveProcessBpmn = leaveProcessBpmn.replace(/\s+(\w+:)([\w\-]+)=/g, ' $2=');
+
+        // 简单解析BPMN XML并映射到LogicFlow节点
+        try {
+            // 使用DOMParser解析XML
+            const parser = new DOMParser();
+            let xmlDoc = parser.parseFromString(leaveProcessBpmn, "text/xml");
+            
+            // 检查解析错误
+            const parserError = xmlDoc.querySelector("parsererror");
+            if (parserError) {
+                console.error("XML解析错误:", parserError.textContent);
+                console.log("预处理后的XML片段:");
+                console.log(leaveProcessBpmn.substring(0, 1000)); // 打印前1000个字符
+                throw new Error("XML格式无效");
+            }
+
+            // 清空现有内容
+            lf.clearData();
+
+            // 获取流程定义和布局信息
+            const processElement = xmlDoc.querySelector('[id="leaveProcess"]');
+            const diagramElement = xmlDoc.querySelector('[id="BPMNPlane_leaveProcess"]');
+            
+            if (!processElement || !diagramElement) {
+                console.log("XML结构:", xmlDoc.documentElement.outerHTML.substring(0, 500));
+                throw new Error("找不到有效的流程定义或布局信息");
+            }
+            
+            // 获取所有的形状元素（节点）
+            const shapes = Array.from(diagramElement.children).filter(child => 
+                child.tagName.toLowerCase().includes('shape')
+            );
+
+            // 获取所有的连线元素
+            const edges = Array.from(diagramElement.children).filter(child => 
+                child.tagName.toLowerCase().includes('edge')
+            );
+
+            // 创建节点映射
+            const nodeMap = {};
+
+            // 处理形状节点
+            shapes.forEach(shape => {
+                // 修复获取bpmnElementId的逻辑
+                const bpmnElementId = shape.getAttribute('bpmnelement') || shape.getAttribute('bpmnElement');
+                
+                if (!bpmnElementId) {
+                    console.warn('无法获取bpmnElementId:', shape);
+                    return;
+                }
+                
+                // 在process中查找对应元素
+                const bpmnElement = processElement.querySelector(`[id="${bpmnElementId}"]`);
+                
+                if(!bpmnElement) {
+                    console.warn(`找不到BPMN元素: ${bpmnElementId}`);
+                    return;
+                }
+                
+                // 查找边界信息
+                const bounds = Array.from(shape.children).find(child => 
+                    child.tagName.toLowerCase().includes('bounds')
+                );
+                
+                if(bounds) {
+                    const x = parseFloat(bounds.getAttribute('x')) + parseFloat(bounds.getAttribute('width')) / 2;
+                    const y = parseFloat(bounds.getAttribute('y')) + parseFloat(bounds.getAttribute('height')) / 2;
+                    
+                    let nodeType = 'user-task'; // 默认类型
+                    let title = bpmnElement.getAttribute('name') || bpmnElementId; // 使用name属性作为标题
+                    
+                    // 根据BPMN元素类型确定LogicFlow节点类型
+                    if(bpmnElement.tagName.toLowerCase().includes('startevent')) {
+                        nodeType = 'start-node';
+                        title = bpmnElement.getAttribute('name') || '开始';
+                    } else if(bpmnElement.tagName.toLowerCase().includes('endevent')) {
+                        nodeType = 'end-node';
+                        title = bpmnElement.getAttribute('name') || '结束';
+                    } else if(bpmnElement.tagName.toLowerCase().includes('exclusivegateway')) {
+                        nodeType = 'exclusive-gateway';
+                        title = bpmnElement.getAttribute('name') || '审批网关';
+                    } else if(bpmnElement.tagName.toLowerCase().includes('usertask')) {
+                        nodeType = 'user-task';
+                        title = bpmnElement.getAttribute('name') || '用户任务';
+                    }
+                    
+                    const node = {
+                        id: bpmnElementId,
+                        type: nodeType,
+                        x: x,
+                        y: y,
+                        text: title,
+                        properties: {
+                            title: title,
+                            content: title,
+                            status: 'not-started'
+                        }
+                    };
+                    
+                    // 根据不同类型设置尺寸
+                    if(nodeType === 'start-node' || nodeType === 'end-node') {
+                        node.width = 60;
+                        node.height = 60;
+                    } else if(nodeType === 'exclusive-gateway') {
+                        node.width = 80;
+                        node.height = 80;
+                    } else {
+                        node.width = 140;
+                        node.height = 100;
+                    }
+                    
+                    lf.addNode(node);
+                    nodeMap[bpmnElementId] = { x, y };
+                }
+            });
+
+            // 处理连线
+            edges.forEach(edge => {
+                const bpmnElementId = edge.getAttribute('bpmnelement') || edge.getAttribute('bpmnElement');
+                
+                if (!bpmnElementId) {
+                    console.warn('无法获取连线的bpmnElementId:', edge);
+                    return;
+                }
+                
+                // 在process中查找对应元素
+                const flowElement = processElement.querySelector(`[id="${bpmnElementId}"]`);
+                if(flowElement) {
+                    const sourceRef = flowElement.getAttribute('sourceref') || flowElement.getAttribute('sourceRef');
+                    const targetRef = flowElement.getAttribute('targetref') || flowElement.getAttribute('targetRef');
+                    
+                    // 检查源节点和目标节点是否存在
+                    if(nodeMap[sourceRef] && nodeMap[targetRef]) {
+                        // 创建连线
+                        lf.addEdge({
+                            id: bpmnElementId,
+                            type: 'polyline',
+                            sourceNodeId: sourceRef,
+                            targetNodeId: targetRef,
+                            text: ''
+                        });
+                    } else {
+                        console.warn(`跳过连线 ${bpmnElementId}: 源节点或目标节点不存在 (${sourceRef} -> ${targetRef})`);
+                    }
+                }
+            });
+
+            // 调整视图以适应画布
+            lf.fitView();
+            
+            console.log('BPMN流程图已加载');
+        } catch (err) {
+            console.error('加载BPMN流程失败：', err);
+            alert("加载BPMN流程失败：" + err.message);
+        }
     };
 
     const handleUndo = () => {
@@ -478,10 +856,10 @@ export default function FlowGraph() {
                             style={{
                                 background: p.style?.fill || "#fff",
                                 border: `2px solid ${p.style?.stroke || "#cbd5e1"}`,
-                                borderRadius: p.type === "start-node" || p.type === "end-node" ? "50%" : p.type === "diamond" ? "6px" : "6px",
-                                width: (p.type === "start-node" || p.type === "end-node") ? 44 : 36,
-                                height: (p.type === "start-node" || p.type === "end-node") ? 44 : 28,
-                                transform: p.type === "diamond" ? "rotate(45deg) scale(.9)" : "none",
+                                borderRadius: p.type === "start-node" || p.type === "end-node" ? "50%" : p.type === "exclusive-gateway" ? "0" : "6px",
+                                width: (p.type === "start-node" || p.type === "end-node") ? 44 : p.type === "exclusive-gateway" ? 36 : 36,
+                                height: (p.type === "start-node" || p.type === "end-node") ? 44 : p.type === "exclusive-gateway" ? 36 : 28,
+                                transform: p.type === "exclusive-gateway" ? "rotate(45deg)" : "none",
                                 boxShadow: "0 4px 10px rgba(2,6,23,0.35)",
                             }}
                         />
@@ -495,7 +873,8 @@ export default function FlowGraph() {
 
             <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
                 <div className="toolbar">
-                    <button className="primary" onClick={handleSave}>保存</button>
+                    <button className="primary" onClick={handleImportBpmn}>导入请假流程</button>
+                    <button onClick={handleSave}>保存</button>
                     <button onClick={handleLoad}>加载</button>
                     <button onClick={handleExportBpmn}>导出 .bpmn</button>
                     <button onClick={handleViewJson}>查看JSON</button>
