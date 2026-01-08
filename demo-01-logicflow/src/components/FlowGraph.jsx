@@ -5,45 +5,201 @@ import {
   CircleNodeModel,
   RectNode,
   RectNodeModel,
+  h,
 } from "@logicflow/core";
 import { BPMNAdapter } from "@logicflow/extension";
 import "@logicflow/core/dist/index.css";
 
 // 自定义开始节点 - 圆形
-class StartNode extends CircleNode {}
+class StartNode extends CircleNode {
+}
 
 class StartNodeModel extends CircleNodeModel {
   constructor(data, graphModel) {
     super(data, graphModel);
     this.r = 60;
-    this.stroke = "#1E90FF";
-    this.fill = "#e6f7ff";
+    this.strokeWidth = 2;
+    this.stroke = '#1E90FF';
+    this.fill = '#e6f7ff';
   }
 }
 
 // 自定义结束节点 - 圆形
-class EndNode extends CircleNode {}
+class EndNode extends CircleNode {
+}
 
 class EndNodeModel extends CircleNodeModel {
   constructor(data, graphModel) {
     super(data, graphModel);
     this.r = 60;
     this.strokeWidth = 2;
-    this.stroke = "#FF4500";
-    this.fill = "#fff0f0";
+    this.stroke = '#FF4500';
+    this.fill = '#fff0f0';
   }
 }
 
-// 自定义任务节点 - 矩形
-class TaskNode extends RectNode {}
-
+// 任务节点模型
 class TaskNodeModel extends RectNodeModel {
-  constructor(data, graphModel) {
-    super(data, graphModel);
-    this.width = 100;
-    this.height = 60;
-    this.stroke = "#fb923c";
-    this.fill = "#fff7ed";
+  setAttributes() {
+    const width = 140;
+    const height = 100;
+    
+    this.width = width;
+    this.height = height;
+    this.stroke = '#fb923c';
+    this.fill = '#fff7ed';
+    
+    // 设置锚点偏移，使节点可以连接
+    this.anchorsOffset = [
+      [width / 2, 0],    // 右侧中心
+      [-width / 2, 0],   // 左侧中心
+      [0, -height / 2],  // 顶部中心
+      [0, height / 2]    // 底部中心
+    ];
+    
+    // 安全地设置默认属性，避免递归调用
+    const defaultProps = {
+      title: '任务',
+      content: '',
+      status: 'not-started' // 'not-started', 'processing', 'completed'
+    };
+    
+    // 合并默认属性和传入的属性
+    this.properties = {
+      ...defaultProps,
+      ...(this.getData().properties || {})
+    };
+  }
+}
+
+// 任务节点视图
+class TaskNodeView extends RectNode {
+  getShape() {
+    // 通过 getAttributes 获取 model 中的属性
+    const { 
+      x, 
+      y, 
+      width, 
+      height, 
+      fill, 
+      stroke, 
+      strokeWidth,
+      properties 
+    } = this.props.model;
+    
+    const { title, content, status } = properties;
+
+    // 确定状态栏样式
+    let statusBg, statusColor, statusText;
+    switch(status) {
+      case 'completed':
+        statusBg = '#bbf7d0';
+        statusColor = '#22c55e';
+        statusText = '已完成';
+        break;
+      case 'processing':
+        statusBg = '#dbeafe';
+        statusColor = '#3b82f6';
+        statusText = '处理中';
+        break;
+      default:
+        statusBg = '#fee2e2';
+        statusColor = '#ef4444';
+        statusText = '未开始';
+    }
+
+    // 计算各区域尺寸
+    const titleHeight = 30;
+    const contentHeight = 45;
+    const statusHeight = 25;
+    const totalHeight = titleHeight + contentHeight + statusHeight;
+    
+    // 创建容器组
+    return h("g", {}, [
+      // 主容器矩形
+      h("rect", {
+        x: x - width / 2,
+        y: y - height / 2,
+        width,
+        height,
+        fill: '#fff7ed',
+        stroke,
+        strokeWidth: 1,
+        rx: 6,
+        ry: 6
+      }),
+      
+      // 标题区域矩形
+      h("rect", {
+        x: x - width / 2,
+        y: y - height / 2,
+        width,
+        height: titleHeight,
+        fill: '#fb923c',
+        stroke: 'none',
+        rx: 6,
+        ry: 6
+      }),
+      
+      // 标题文本
+      h("text", {
+        x,
+        y: y - height / 2 + titleHeight / 2,
+        textAnchor: 'middle',
+        dominantBaseline: 'middle',
+        fill: '#fff',
+        fontWeight: 'bold',
+        fontSize: 13
+      }, title || '任务'),
+      
+      // 内容区域矩形
+      h("rect", {
+        x: x - width / 2,
+        y: y - height / 2 + titleHeight,
+        width,
+        height: contentHeight,
+        fill: '#fef7ed',
+        stroke: 'none'
+      }),
+      
+      // 内容文本
+      h("text", {
+        x,
+        y: y - height / 2 + titleHeight + contentHeight / 2,
+        textAnchor: 'middle',
+        dominantBaseline: 'middle',
+        fill: '#333',
+        fontSize: 12,
+        style: {
+          wordWrap: 'break-word',
+          textAlign: 'center',
+          padding: '5px'
+        }
+      }, content || ''),
+      
+      // 状态区域矩形
+      h("rect", {
+        x: x - width / 2,
+        y: y - height / 2 + titleHeight + contentHeight,
+        width,
+        height: statusHeight,
+        fill: statusBg,
+        stroke: 'none',
+        rx: 0,
+        ry: 6 // 只有底部圆角
+      }),
+      
+      // 状态文本
+      h("text", {
+        x,
+        y: y - height / 2 + titleHeight + contentHeight + statusHeight / 2,
+        textAnchor: 'middle',
+        dominantBaseline: 'middle',
+        fill: statusColor,
+        fontSize: 11,
+        fontWeight: 'normal'
+      }, statusText)
+    ]);
   }
 }
 
@@ -67,349 +223,337 @@ const styles = `
 
 /* inject styles once */
 (function injectStyles() {
-  if (typeof document === "undefined") return;
-  if (document.getElementById("logicflow-enhanced-styles")) return;
-  const s = document.createElement("style");
-  s.id = "logicflow-enhanced-styles";
-  s.innerHTML = styles;
-  document.head.appendChild(s);
+    if (typeof document === "undefined") return;
+    if (document.getElementById("logicflow-enhanced-styles")) return;
+    const s = document.createElement("style");
+    s.id = "logicflow-enhanced-styles";
+    s.innerHTML = styles;
+    document.head.appendChild(s);
 })();
 
 /* helper download */
 function downloadFile(filename, content, mime = "application/json") {
-  const blob = new Blob([content], { type: mime });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
+    const blob = new Blob([content], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
 }
+
 
 /* Node palette definitions (5 styles) */
 const PALETTE = [
-  {
-    type: "start-node",
-    label: "开始",
-    style: { fill: "#e6f7ff", stroke: "#1E90FF" },
-    r: 60,
-  },
-  {
-    type: "end-node",
-    label: "结束",
-    style: { fill: "#fff0f0", stroke: "#FF4500" },
-    w: 60,
-    h: 60,
-  },
-  {
-    type: "task-node",
-    label: "任务",
-    style: { fill: "#fff7ed", stroke: "#fb923c" },
-    w: 100,
-    h: 60,
-  },
-  {
-    type: "diamond",
-    label: "判断 (菱形)",
-    style: { fill: "#f3e8ff", stroke: "#a78bfa" },
-    w: 110,
-    h: 70,
-  },
-  {
-    type: "polygon",
-    label: "多边形示例",
-    style: { fill: "#fff1f2", stroke: "#fb7185" },
-    w: 120,
-    h: 60,
-  },
+    { type: "start-node", label: "开始", style: { fill: "#e6f7ff", stroke: "#1E90FF" }, w: 60, h: 60 },
+    { type: "end-node", label: "结束", style: { fill: "#fff0f0", stroke: "#FF4500" }, w: 60, h: 60 },
+    { type: "task-node", label: "任务", style: { fill: "#fff7ed", stroke: "#fb923c" }, w: 140, h: 100 },
+    { type: "diamond", label: "判断 (菱形)", style: { fill: "#f3e8ff", stroke: "#a78bfa" }, w: 110, h: 70 },
+    { type: "polygon", label: "多边形示例", style: { fill: "#fff1f2", stroke: "#fb7185" }, w: 120, h: 60 },
 ];
 
-/* Exported enhanced FlowGraph component (will replace the original component body) */
+/* Exported enhanced FlowGraph component */
 export default function FlowGraph() {
-  const containerRef = useRef(null);
-  const lfRef = useRef(null);
-  const idSeed = useRef(1);
+    const containerRef = useRef(null);
+    const lfRef = useRef(null);
+    const idSeed = useRef(1);
 
-  /* initialize LogicFlow */
-  React.useEffect(() => {
-    if (!containerRef.current) return;
+    /* initialize LogicFlow */
+    React.useEffect(() => {
+        if (!containerRef.current) return;
 
-    const lf = new LogicFlow({
-      container: containerRef.current,
-      grid: true,
-      stopScrollGraph: true,
-      keyboard: true,
-      // 自适应容器大小
-      adjustWidth: "100%",
-      adjustHeight: "100%",
-    });
+        const lf = new LogicFlow({
+            container: containerRef.current,
+            grid: true,
+            stopScrollGraph: true,
+            keyboard: true,
+            // 自适应容器大小
+            adjustWidth: '100%',
+            adjustHeight: '100%',
+        });
 
-    // 注册自定义节点
-    lf.register({
-      type: "start-node",
-      view: StartNode,
-      model: StartNodeModel,
-    });
+        // 注册自定义节点
+        lf.register({
+          type: 'start-node',
+          view: StartNode,
+          model: StartNodeModel,
+        });
+        
+        lf.register({
+          type: 'end-node',
+          view: EndNode,
+          model: EndNodeModel,
+        });
+        
+        lf.register({
+          type: 'task-node',
+          view: TaskNodeView,
+          model: TaskNodeModel,
+        });
 
-    lf.register({
-      type: "end-node",
-      view: EndNode,
-      model: EndNodeModel,
-    });
+        lfRef.current = lf;
 
-    lf.register({
-      type: "task-node",
-      view: TaskNode,
-      model: TaskNodeModel,
-    });
+        // render a minimal starting graph
+        lf.render({
+            nodes: [],
+            edges: [],
+        });
 
-    lfRef.current = lf;
+        // enable creating edges by dragging from anchor points (default interact)
+        // try to ensure edge is addable via toolbar action; we provide manual connect by enabling "edge" mode toggle later if needed
 
-    // render a minimal starting graph
-    lf.render({
-      nodes: [],
-      edges: [],
-    });
+        // basic event logging (optional)
+        lf.on("connection.create", ({ edge }) => {
+            // keep default label style if any
+            console.log("连接创建：", edge);
+        });
 
-    // enable creating edges by dragging from anchor points (default interact)
-    // try to ensure edge is addable via toolbar action; we provide manual connect by enabling "edge" mode toggle later if needed
+        // cleanup
+        return () => {
+            lf.destroy();
+            lfRef.current = null;
+        };
+    }, []);
 
-    // basic event logging (optional)
-    lf.on("connection.create", ({ edge }) => {
-      // keep default label style if any
-      console.log("连接创建：", edge);
-    });
-
-    // cleanup
-    return () => {
-      lf.destroy();
-      lfRef.current = null;
-    };
-  }, []);
-
-  /* drag & drop handlers */
-  const onDragStart = (e, item) => {
-    e.dataTransfer.setData("text/plain", JSON.stringify(item));
-    // show dragging ghost
-    const ghost = document.createElement("div");
-    ghost.style.padding = "6px 10px";
-    ghost.style.background = "#111827";
-    ghost.style.color = "#fff";
-    ghost.style.borderRadius = "6px";
-    ghost.style.width = "100px";
-    ghost.style.fontSize = "12px";
-    ghost.textContent = item.label;
-    document.body.appendChild(ghost);
-    e.dataTransfer.setDragImage(ghost, -10, -10);
-    setTimeout(() => ghost.remove(), 0);
-  };
-
-  const onCanvasDrop = (e) => {
-    e.preventDefault();
-    const text = e.dataTransfer.getData("text/plain");
-    if (!text) return;
-    let payload;
-    try {
-      payload = JSON.parse(text);
-    } catch {
-      return;
-    }
-    const lf = lfRef.current;
-    if (!lf || !containerRef.current) return;
-    const rect = containerRef.current.getBoundingClientRect();
-    let x = e.clientX - rect.left;
-    let y = e.clientY - rect.top;
-    const id = `node_${Date.now()}_${idSeed.current++}`;
-
-    // 修复循环中函数的问题 - 将函数提取到循环外
-    const isNodeOverlapping = (node) => {
-      return Math.abs(node.x - x) < 50 && Math.abs(node.y - y) < 50;
+    /* drag & drop handlers */
+    const onDragStart = (e, item) => {
+        e.dataTransfer.setData("text/plain", JSON.stringify(item));
+        // show dragging ghost
+        const ghost = document.createElement("div");
+        ghost.style.padding = "6px 10px";
+        ghost.style.background = "#111827";
+        ghost.style.color = "#fff";
+        ghost.style.borderRadius = "6px";
+        ghost.style.width = "100px";
+        ghost.style.fontSize = "12px";
+        ghost.textContent = item.label;
+        document.body.appendChild(ghost);
+        e.dataTransfer.setDragImage(ghost, -10, -10);
+        setTimeout(() => ghost.remove(), 0);
     };
 
-    const existingNodes = lf.getGraphData().nodes || [];
-    let isOverlapping;
+    const onCanvasDrop = (e) => {
+        e.preventDefault();
+        const text = e.dataTransfer.getData("text/plain");
+        if (!text) return;
+        let payload;
+        try { payload = JSON.parse(text); } catch { return; }
+        const lf = lfRef.current;
+        if (!lf || !containerRef.current) return;
+        const rect = containerRef.current.getBoundingClientRect();
+        let x = e.clientX - rect.left;
+        let y = e.clientY - rect.top;
+        const id = `node_${Date.now()}_${idSeed.current++}`;
+        
+        // 修复循环中函数的问题 - 将函数提取到循环外
+        const isNodeOverlapping = (node) => {
+          return Math.abs(node.x - x) < 50 && Math.abs(node.y - y) < 50;
+        };
+        
+        const existingNodes = lf.getGraphData().nodes || [];
+        let isOverlapping;
+        
+        do {
+            isOverlapping = existingNodes.some(isNodeOverlapping);
+            if (isOverlapping) {
+                y += 50; // Move down if overlapping
+            }
+        } while (isOverlapping);
 
-    do {
-      isOverlapping = existingNodes.some(isNodeOverlapping);
-      if (isOverlapping) {
-        y += 50; // Move down if overlapping
-      }
-    } while (isOverlapping);
+        // create node options depending on type (basic)
+        const base = {
+            id,
+            text: payload.label,
+            x,
+            y,
+            type: payload.type,
+        };
 
-    // create node options depending on type (basic)
-    const base = {
-      id,
-      text: payload.label,
-      x,
-      y,
-      type: payload.type,
+        // 根据类型设置节点尺寸
+        if (payload.type === 'start-node' || payload.type === 'end-node') {
+            // 圆形节点，宽度和高度应该相等
+            base.width = payload.w || 60;
+            base.height = payload.w || 60; // 确保圆形节点是圆的
+        } else {
+            // 矩形节点
+            base.width = payload.w || 140;
+            base.height = payload.h || 100;
+        }
+
+        // When LogicFlow doesn't support a named type, fallback to rect with a custom shape property
+        try {
+            lf.addNode(base);
+            // apply style if provided via update
+            if (payload.style) {
+                // try to update node style via updateNode
+                lf.setProperties(base.id, { style: payload.style });
+            }
+        } catch (err) {
+            console.error("添加节点时出错:", err);
+            // fallback: add rect node
+            lf.addNode({
+                ...base,
+                type: "rect",
+            });
+        }
     };
 
-    // 根据类型设置节点尺寸
-    if (payload.type === "start-node" || payload.type === "end-node") {
-      // 圆形节点，宽度和高度应该相等
-      base.width = payload.w || 60;
-      base.height = payload.w || 60; // 确保圆形节点是圆的
-    } else {
-      // 矩形节点
-      base.width = payload.w || 100;
-      base.height = payload.h || 60;
-    }
+    const onCanvasDragOver = (e) => e.preventDefault();
 
-    // When LogicFlow doesn't support a named type, fallback to rect with a custom shape property
-    try {
-      lf.addNode(base);
-      // apply style if provided via update
-      if (payload.style) {
-        // try to update node style via updateNode
-        lf.setProperties(base.id, { style: payload.style });
-      }
-    } catch (err) {
-      console.error("添加节点时出错:", err);
-      // fallback: add rect node
-      lf.addNode({
-        ...base,
-        type: "rect",
-      });
-    }
-  };
+    /* Toolbar actions */
+    const handleSave = () => {
+        const lf = lfRef.current;
+        if (!lf) return;
+        const bpmnXmlStr = lf.getGraphData ? lf.getGraphData() : lf.save();
+        console.log(bpmnXmlStr);
 
-  const onCanvasDragOver = (e) => e.preventDefault();
+    };
 
-  /* Toolbar actions */
-  const handleSave = () => {
-    const lf = lfRef.current;
-    if (!lf) return;
-    const bpmnXmlStr = lf.getGraphData ? lf.getGraphData() : lf.save();
-    console.log(bpmnXmlStr);
-  };
+    const handleLoad = () => {
+        const lf = lfRef.current;
+        if (!lf) return;
+        const raw = localStorage.getItem("logicflow_demo_save");
+        if (!raw) { alert("没有本地保存"); return; }
+        try {
+            const d = JSON.parse(raw);
+            lf.render(d);
+        } catch (err) {
+            alert("加载失败：" + err.message);
+        }
+    };
 
-  const handleLoad = () => {
-    const lf = lfRef.current;
-    if (!lf) return;
-    const raw = localStorage.getItem("logicflow_demo_save");
-    if (!raw) {
-      alert("没有本地保存");
-      return;
-    }
-    try {
-      const d = JSON.parse(raw);
-      lf.render(d);
-    } catch (err) {
-      alert("加载失败：" + err.message);
-    }
-  };
+    const handleExportBpmn = () => {
+        const lf = lfRef.current;
+        if (!lf) return;
+        const data = lf.getGraphData ? lf.getGraphData() : lf.save();
+        // simple JSON -> file with .bpmn extension (structure is logicflow json; converting to real BPMN XML is out of scope)
+        downloadFile(`logicflow_${Date.now()}.bpmn`, JSON.stringify(data, null, 2), "application/xml");
+    };
 
-  const handleExportBpmn = () => {
-    const lf = lfRef.current;
-    if (!lf) return;
-    const data = lf.getGraphData ? lf.getGraphData() : lf.save();
-    // simple JSON -> file with .bpmn extension (structure is logicflow json; converting to real BPMN XML is out of scope)
-    downloadFile(
-      `logicflow_${Date.now()}.bpmn`,
-      JSON.stringify(data, null, 2),
-      "application/xml"
+    const handleViewJson = () => {
+        const lf = lfRef.current;
+        if (!lf) return;
+        const data = lf.getGraphData ? lf.getGraphData() : lf.save();
+        // 将数据以格式化的JSON形式显示在弹窗中
+        const jsonStr = JSON.stringify(data, null, 2);
+        const textArea = document.createElement('textarea');
+        textArea.value = jsonStr;
+        textArea.style.width = '80%';
+        textArea.style.height = '60%';
+        textArea.style.position = 'fixed';
+        textArea.style.top = '20%';
+        textArea.style.left = '10%';
+        textArea.style.zIndex = '1000';
+        textArea.readOnly = true;
+        
+        const overlay = document.createElement('div');
+        overlay.style.position = 'fixed';
+        overlay.style.top = '0';
+        overlay.style.left = '0';
+        overlay.style.width = '100%';
+        overlay.style.height = '100%';
+        overlay.style.backgroundColor = 'rgba(0,0,0,0.5)';
+        overlay.style.zIndex = '999';
+        
+        const closeBtn = document.createElement('button');
+        closeBtn.textContent = '关闭';
+        closeBtn.style.position = 'absolute';
+        closeBtn.style.top = '10px';
+        closeBtn.style.right = '10px';
+        closeBtn.style.zIndex = '1001';
+        closeBtn.onclick = () => {
+            document.body.removeChild(textArea);
+            document.body.removeChild(overlay);
+        };
+        
+        textArea.appendChild(closeBtn);
+        document.body.appendChild(overlay);
+        document.body.appendChild(textArea);
+        
+        textArea.focus();
+        textArea.select();
+    };
+
+    const handleUndo = () => {
+        const lf = lfRef.current;
+        if (!lf) return;
+        if (lf.commandManager && typeof lf.commandManager.undo === "function") {
+            lf.commandManager.undo();
+            return;
+        }
+        if (typeof lf.undo === "function") {
+            lf.undo();
+            return;
+        }
+        // fallback: no-op
+    };
+
+    const handleClear = () => {
+        const lf = lfRef.current;
+        if (!lf) return;
+        lf.render({ nodes: [], edges: [] });
+    };
+
+    /* Render JSX UI */
+    return (
+        <div className="logicflow-app">
+            <div className="logicflow-sidebar" aria-hidden="true">
+                <h3>节点工具箱</h3>
+                {PALETTE.map((p) => (
+                    <div
+                        key={p.type}
+                        className="palette-item"
+                        draggable
+                        onDragStart={(e) => onDragStart(e, p)}
+                        title={`拖拽到右侧画布：${p.label}`}
+                    >
+                        <div
+                            className="palette-sample"
+                            style={{
+                                background: p.style?.fill || "#fff",
+                                border: `2px solid ${p.style?.stroke || "#cbd5e1"}`,
+                                borderRadius: p.type === "start-node" || p.type === "end-node" ? "50%" : p.type === "diamond" ? "6px" : "6px",
+                                width: (p.type === "start-node" || p.type === "end-node") ? 44 : 36,
+                                height: (p.type === "start-node" || p.type === "end-node") ? 44 : 28,
+                                transform: p.type === "diamond" ? "rotate(45deg) scale(.9)" : "none",
+                                boxShadow: "0 4px 10px rgba(2,6,23,0.35)",
+                            }}
+                        />
+                        <div style={{ fontSize: 12, color: "#e6eefc" }}>{p.label}</div>
+                    </div>
+                ))}
+                <div style={{ marginTop: "auto", fontSize: 12, color: "#9fb8ff" }}>
+                    提示：拖拽节点到右侧画布，选中节点后可连接创建连线。
+                </div>
+            </div>
+
+            <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+                <div className="toolbar">
+                    <button className="primary" onClick={handleSave}>保存</button>
+                    <button onClick={handleLoad}>加载</button>
+                    <button onClick={handleExportBpmn}>导出 .bpmn</button>
+                    <button onClick={handleViewJson}>查看JSON</button>
+                    <button onClick={handleUndo}>回退</button>
+                    <button onClick={handleClear}>清空</button>
+                    <div className="legend">LogicFlow Demo</div>
+                </div>
+
+                <div className="canvas-wrap">
+                    <div
+                        className="canvas-area"
+                        onDrop={onCanvasDrop}
+                        onDragOver={onCanvasDragOver}
+                        style={{ position: "relative", borderRadius: 8, overflow: "hidden" }}
+                    >
+                        <div
+                            ref={containerRef}
+                            style={{ width: "100%", height: "100%", minHeight: 360, background: "transparent" }}
+                        />
+                    </div>
+                </div>
+            </div>
+        </div>
     );
-  };
-
-  const handleUndo = () => {
-    const lf = lfRef.current;
-    if (!lf) return;
-    if (lf.commandManager && typeof lf.commandManager.undo === "function") {
-      lf.commandManager.undo();
-      return;
-    }
-    if (typeof lf.undo === "function") {
-      lf.undo();
-      return;
-    }
-    // fallback: no-op
-  };
-
-  const handleClear = () => {
-    const lf = lfRef.current;
-    if (!lf) return;
-    lf.render({ nodes: [], edges: [] });
-  };
-
-  /* Render JSX UI */
-  return (
-    <div className="logicflow-app">
-      <div className="logicflow-sidebar" aria-hidden="true">
-        <h3>节点工具箱</h3>
-        {PALETTE.map((p) => (
-          <div
-            key={p.type}
-            className="palette-item"
-            draggable
-            onDragStart={(e) => onDragStart(e, p)}
-            title={`拖拽到右侧画布：${p.label}`}
-          >
-            <div
-              className="palette-sample"
-              style={{
-                background: p.style?.fill || "#fff",
-                border: `2px solid ${p.style?.stroke || "#cbd5e1"}`,
-                borderRadius:
-                  p.type === "start-node" || p.type === "end-node"
-                    ? "50%"
-                    : p.type === "diamond"
-                    ? "6px"
-                    : "6px",
-                width:
-                  p.type === "start-node" || p.type === "end-node" ? 44 : 36,
-                height:
-                  p.type === "start-node" || p.type === "end-node" ? 44 : 28,
-                transform:
-                  p.type === "diamond" ? "rotate(45deg) scale(.9)" : "none",
-                boxShadow: "0 4px 10px rgba(2,6,23,0.35)",
-              }}
-            />
-            <div style={{ fontSize: 12, color: "#e6eefc" }}>{p.label}</div>
-          </div>
-        ))}
-        <div style={{ marginTop: "auto", fontSize: 12, color: "#9fb8ff" }}>
-          提示：拖拽节点到右侧画布，选中节点后可连接创建连线。
-        </div>
-      </div>
-
-      <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-        <div className="toolbar">
-          <button className="primary" onClick={handleSave}>
-            保存
-          </button>
-          <button onClick={handleLoad}>加载</button>
-          <button onClick={handleExportBpmn}>导出 .bpmn</button>
-          <button onClick={handleUndo}>回退</button>
-          <button onClick={handleClear}>清空</button>
-          <div className="legend">LogicFlow Demo</div>
-        </div>
-
-        <div className="canvas-wrap">
-          <div
-            className="canvas-area"
-            onDrop={onCanvasDrop}
-            onDragOver={onCanvasDragOver}
-            style={{
-              position: "relative",
-              borderRadius: 8,
-              overflow: "hidden",
-            }}
-          >
-            <div
-              ref={containerRef}
-              style={{
-                width: "100%",
-                height: "100%",
-                minHeight: 360,
-                background: "transparent",
-              }}
-            />
-          </div>
-        </div>
-      </div>
-    </div>
-  );
 }
