@@ -437,43 +437,7 @@ export default function FlowGraph() {
         if (!lf) return;
         const data = lf.getGraphData ? lf.getGraphData() : lf.save();
         // 将数据以格式化的JSON形式显示在弹窗中
-        const jsonStr = JSON.stringify(data, null, 2);
-        const textArea = document.createElement('textarea');
-        textArea.value = jsonStr;
-        textArea.style.width = '80%';
-        textArea.style.height = '60%';
-        textArea.style.position = 'fixed';
-        textArea.style.top = '20%';
-        textArea.style.left = '10%';
-        textArea.style.zIndex = '1000';
-        textArea.readOnly = true;
-        
-        const overlay = document.createElement('div');
-        overlay.style.position = 'fixed';
-        overlay.style.top = '0';
-        overlay.style.left = '0';
-        overlay.style.width = '100%';
-        overlay.style.height = '100%';
-        overlay.style.backgroundColor = 'rgba(0,0,0,0.5)';
-        overlay.style.zIndex = '999';
-        
-        const closeBtn = document.createElement('button');
-        closeBtn.textContent = '关闭';
-        closeBtn.style.position = 'absolute';
-        closeBtn.style.top = '10px';
-        closeBtn.style.right = '10px';
-        closeBtn.style.zIndex = '1001';
-        closeBtn.onclick = () => {
-            document.body.removeChild(textArea);
-            document.body.removeChild(overlay);
-        };
-        
-        textArea.appendChild(closeBtn);
-        document.body.appendChild(overlay);
-        document.body.appendChild(textArea);
-        
-        textArea.focus();
-        textArea.select();
+        console.log(data)
     };
 
     const handleUndo = () => {
