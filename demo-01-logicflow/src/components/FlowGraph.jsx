@@ -12,6 +12,7 @@ import {
 import { PolylineEdge, PolylineEdgeModel } from '@logicflow/core';
 import { BPMNAdapter } from "@logicflow/extension";
 import "@logicflow/core/dist/index.css";
+import axios from 'axios';
 
 // 自定义开始节点 - 圆形
 class StartNode extends CircleNode {
@@ -63,7 +64,7 @@ class UserTaskNodeModel extends RectNodeModel {
     // 安全地设置默认属性，避免递归调用
     const defaultProps = {
       title: '用户任务',
-      content: '用户任务详情',
+      content: '',
       status: 'not-started' // 'not-started', 'processing', 'completed'
     };
     
@@ -178,7 +179,7 @@ class UserTaskNodeView extends RectNode {
           textAlign: 'center',
           padding: '5px'
         }
-      }, content || '用户任务详情'),
+      }, content || ''),
       
       // 状态区域矩形
       h("rect", {
@@ -590,10 +591,10 @@ export default function FlowGraph() {
     <bpmn2:sequenceFlow id="flow1" sourceRef="startEvent" targetRef="applyTask"/>
     <bpmn2:sequenceFlow id="flow2" sourceRef="applyTask" targetRef="approvalGateway"/>
     <bpmn2:sequenceFlow id="flow3" sourceRef="approvalGateway" targetRef="managerApprovalTask">
-      <bpmn2:conditionExpression>3</bpmn2:conditionExpression>
+      <bpmn2:conditionExpression>4</bpmn2:conditionExpression>
     </bpmn2:sequenceFlow>
     <bpmn2:sequenceFlow id="flow4" sourceRef="approvalGateway" targetRef="hrApprovalTask">
-      <bpmn2:conditionExpression>3</bpmn2:conditionExpression>
+      <bpmn2:conditionExpression>4</bpmn2:conditionExpression>
     </bpmn2:sequenceFlow>
     <bpmn2:sequenceFlow id="flow5" sourceRef="managerApprovalTask" targetRef="endEvent"/>
     <bpmn2:sequenceFlow id="flow6" sourceRef="hrApprovalTask" targetRef="endEvent"/>
@@ -818,6 +819,280 @@ export default function FlowGraph() {
         }
     };
 
+    const handleDeployProcess = async () => {
+        try {
+            const lf = lfRef.current;
+            if (!lf) {
+                alert('流程图未初始化');
+                return;
+            }
+
+            // 获取当前流程图数据
+            const graphData = lf.getGraphData();
+            
+            // 首先检查是否有任何节点
+            if (!graphData || !graphData.nodes || graphData.nodes.length === 0) {
+                // 如果没有节点，使用默认的请假流程BPMN内容
+                let defaultBpmn = `<?xml version="1.0" encoding="UTF-8"?>
+<bpmn2:definitions 
+  xmlns:bpmn2="http://www.omg.org/spec/BPMN/20100524/MODEL"
+  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+  xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+  xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+  xmlns:flowable="http://flowable.org/bpmn"
+  targetNamespace="http://www.flowable.org/processdef">
+  
+  <bpmn2:process id="leaveProcess" name="请假流程" isExecutable="true">
+    <bpmn2:startEvent id="startEvent" name="开始"/>
+    
+    <bpmn2:userTask id="applyTask" name="提交请假申请" flowable:assignee="\${applicant}">
+      <bpmn2:extensionElements>
+        <flowable:formProperty id="leaveType" name="请假类型" type="string" required="true"/>
+        <flowable:formProperty id="reason" name="请假原因" type="string" required="true"/>
+        <flowable:formProperty id="startDate" name="开始日期" type="date" datePattern="yyyy-MM-dd" required="true"/>
+        <flowable:formProperty id="endDate" name="结束日期" type="date" datePattern="yyyy-MM-dd" required="true"/>
+      </bpmn2:extensionElements>
+    </bpmn2:userTask>
+    
+    <bpmn2:exclusiveGateway id="approvalGateway" name="审批网关"/>
+    
+    <bpmn2:userTask id="managerApprovalTask" name="经理审批" flowable:assignee="\${manager}">
+      <bpmn2:extensionElements>
+        <flowable:formProperty id="approvalResult" name="审批结果" type="enum" required="true">
+          <flowable:value id="approved" name="批准"/>
+          <flowable:value id="rejected" name="拒绝"/>
+        </flowable:formProperty>
+        <flowable:formProperty id="comments" name="审批意见" type="string"/>
+      </bpmn2:extensionElements>
+    </bpmn2:userTask>
+    
+    <bpmn2:userTask id="hrApprovalTask" name="HR审批" flowable:assignee="hr">
+      <bpmn2:extensionElements>
+        <flowable:formProperty id="hrApprovalResult" name="审批结果" type="enum" required="true">
+          <flowable:value id="approved" name="批准"/>
+          <flowable:value id="rejected" name="拒绝"/>
+        </flowable:formProperty>
+        <flowable:formProperty id="hrComments" name="审批意见" type="string"/>
+      </bpmn2:extensionElements>
+    </bpmn2:userTask>
+    
+    <bpmn2:endEvent id="endEvent" name="结束"/>
+    
+    <bpmn2:sequenceFlow id="flow1" sourceRef="startEvent" targetRef="applyTask"/>
+    <bpmn2:sequenceFlow id="flow2" sourceRef="applyTask" targetRef="approvalGateway"/>
+    <bpmn2:sequenceFlow id="flow3" sourceRef="approvalGateway" targetRef="managerApprovalTask">
+      <bpmn2:conditionExpression>\${leaveDays &lt;= 3}</bpmn2:conditionExpression>
+    </bpmn2:sequenceFlow>
+    <bpmn2:sequenceFlow id="flow4" sourceRef="approvalGateway" targetRef="hrApprovalTask">
+      <bpmn2:conditionExpression>\${leaveDays &gt; 3}</bpmn2:conditionExpression>
+    </bpmn2:sequenceFlow>
+    <bpmn2:sequenceFlow id="flow5" sourceRef="managerApprovalTask" targetRef="endEvent"/>
+    <bpmn2:sequenceFlow id="flow6" sourceRef="hrApprovalTask" targetRef="endEvent"/>
+  </bpmn2:process>
+  
+  <bpmndi:BPMNDiagram id="BPMNDiagram_leaveProcess">
+    <bpmndi:BPMNPlane bpmnElement="leaveProcess" id="BPMNPlane_leaveProcess">
+      <bpmndi:BPMNShape bpmnElement="startEvent" id="BPMNShape_startEvent">
+        <dc:Bounds height="30.0" width="30.0" x="100.0" y="150.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape bpmnElement="applyTask" id="BPMNShape_applyTask">
+        <dc:Bounds height="80.0" width="100.0" x="180.0" y="125.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape bpmnElement="approvalGateway" id="BPMNShape_approvalGateway">
+        <dc:Bounds height="40.0" width="40.0" x="330.0" y="145.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape bpmnElement="managerApprovalTask" id="BPMNShape_managerApprovalTask">
+        <dc:Bounds height="80.0" width="100.0" x="200.0" y="250.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape bpmnElement="hrApprovalTask" id="BPMNShape_hrApprovalTask">
+        <dc:Bounds height="80.0" width="100.0" x="420.0" y="125.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape bpmnElement="endEvent" id="BPMNShape_endEvent">
+        <dc:Bounds height="28.0" width="28.0" x="570.0" y="151.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge bpmnElement="flow1" id="BPMNEdge_flow1">
+        <di:waypoint x="130.0" y="165.0"/>
+        <di:waypoint x="180.0" y="165.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge bpmnElement="flow2" id="BPMNEdge_flow2">
+        <di:waypoint x="280.0" y="165.0"/>
+        <di:waypoint x="330.0" y="165.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge bpmnElement="flow3" id="BPMNEdge_flow3">
+        <di:waypoint x="350.0" y="165.0"/>
+        <di:waypoint x="350.0" y="290.0"/>
+        <di:waypoint x="250.0" y="290.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge bpmnElement="flow4" id="BPMNEdge_flow4">
+        <di:waypoint x="370.0" y="165.0"/>
+        <di:waypoint x="470.0" y="165.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge bpmnElement="flow5" id="BPMNEdge_flow5">
+        <di:waypoint x="250.0" y="250.0"/>
+        <di:waypoint x="250.0" y="165.0"/>
+        <di:waypoint x="570.0" y="165.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge bpmnElement="flow6" id="BPMNEdge_flow6">
+        <di:waypoint x="520.0" y="165.0"/>
+        <di:waypoint x="570.0" y="165.0"/>
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn2:definitions>`;
+
+                // 发送默认BPMN到服务器
+                const formData = new FormData();
+                formData.append('bpmnXml', defaultBpmn);
+                formData.append('processName', '请假流程');
+                
+                const response = await axios.post('http://localhost:8086/api/deployment/deploy-with-resources', formData, {
+                    headers: {
+                        'Content-Type': 'multipart/form-data'
+                    }
+                });
+                
+                if (response.status === 200) {
+                    alert('流程部署成功！');
+                } else {
+                    alert('流程部署失败：' + response.statusText);
+                }
+                return;
+            }
+
+            // 如果有节点，尝试将其转换为BPMN格式
+            // 首先获取当前画布上的所有元素
+            const data = lf.getGraphRawData();
+            
+            // 创建一个简化版的BPMN XML
+            let bpmnContent = `<?xml version="1.0" encoding="UTF-8"?>
+<bpmn2:definitions xmlns:bpmn2="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                   xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+                   xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+                   xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+                   xmlns:flowable="http://flowable.org/bpmn"
+                   targetNamespace="http://www.flowable.org/processdef">
+  <bpmn2:process id="dynamicProcess" name="动态流程" isExecutable="true">`;
+
+            // 处理节点
+            data.nodes.forEach(node => {
+                const { id, type, properties } = node;
+                const name = properties.title || properties.name || id;
+
+                switch(type) {
+                    case 'start-node':
+                        bpmnContent += `\n    <bpmn2:startEvent id="${id}" name="${name}"/>`;
+                        break;
+                    case 'end-node':
+                        bpmnContent += `\n    <bpmn2:endEvent id="${id}" name="${name}"/>`;
+                        break;
+                    case 'user-task':
+                        bpmnContent += `\n    <bpmn2:userTask id="${id}" name="${name}" flowable:assignee="\${assignee}"/>`;
+                        break;
+                    case 'exclusive-gateway':
+                        bpmnContent += `\n    <bpmn2:exclusiveGateway id="${id}" name="${name}"/>`;
+                        break;
+                    default:
+                        bpmnContent += `\n    <bpmn2:task id="${id}" name="${name}"/>`;
+                }
+            });
+
+            // 处理连线
+            data.edges.forEach(edge => {
+                const { id, sourceNodeId, targetNodeId } = edge;
+                bpmnContent += `\n    <bpmn2:sequenceFlow id="${id}" sourceRef="${sourceNodeId}" targetRef="${targetNodeId}"/>`;
+            });
+
+            bpmnContent += `\n  </bpmn2:process>`;
+            
+            // 添加BPMNDIagram部分（包含坐标信息）
+            bpmnContent += `
+  <bpmndi:BPMNDiagram id="BPMNDiagram_dynamicProcess">
+    <bpmndi:BPMNPlane bpmnElement="dynamicProcess" id="BPMNPlane_dynamicProcess">`;
+
+            // 为每个节点添加坐标信息
+            data.nodes.forEach(node => {
+                const { id, type, x, y } = node;
+                let width = 100, height = 60;
+                
+                if (type === 'start-node' || type === 'end-node') {
+                    width = 60;
+                    height = 60;
+                } else if (type === 'exclusive-gateway') {
+                    width = 80;
+                    height = 80;
+                }
+                
+                bpmnContent += `
+      <bpmndi:BPMNShape bpmnElement="${id}" id="BPMNShape_${id}">
+        <dc:Bounds height="${height}" width="${width}" x="${x - width/2}" y="${y - height/2}"/>
+      </bpmndi:BPMNShape>`;
+            });
+
+            // 为每条连线添加路径信息
+            data.edges.forEach(edge => {
+                const { id, startPoint, endPoint } = edge;
+                bpmnContent += `
+      <bpmndi:BPMNEdge bpmnElement="${id}" id="BPMNEdge_${id}">
+        <di:waypoint x="${startPoint.x}" y="${startPoint.y}"/>
+        <di:waypoint x="${endPoint.x}" y="${endPoint.y}"/>
+      </bpmndi:BPMNEdge>`;
+            });
+
+            bpmnContent += `
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn2:definitions>`;
+
+            // 发送到服务器
+            const formData = new FormData();
+            formData.append('bpmnXml', bpmnContent);
+            formData.append('processName', '动态流程');
+            
+            const response = await axios.post('http://localhost:8086/api/deployment/deploy-with-resources', formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data'
+                }
+            });
+            
+            if (response.status === 200) {
+                alert('流程部署成功！');
+            } else {
+                alert('流程部署失败：' + response.statusText);
+            }
+        } catch (error) {
+            console.error('部署流程时出错：', error);
+            alert('流程部署失败：' + error.message);
+        }
+    };
+
+    const handleStartProcess = async () => {
+        try {
+            // 发送启动流程请求
+            const response = await axios.post(
+                'http://localhost:8086/api/workflow/start?processDefinitionKey=leaveProcess&businessKey=leave_123',
+                {
+                    applicant: "张三",
+                    manager: "李四",
+                    leaveDays: 5
+                },
+                {
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                }
+            );
+            
+            if (response.status === 200) {
+                alert('流程启动成功！');
+            } else {
+                alert('流程启动失败：' + response.statusText);
+            }
+        } catch (error) {
+            console.error('启动流程时出错：', error);
+            alert('流程启动失败：' + error.message);
+        }
+    };
+
     const handleUndo = () => {
         const lf = lfRef.current;
         if (!lf) return;
@@ -880,6 +1155,8 @@ export default function FlowGraph() {
                     <button onClick={handleViewJson}>查看JSON</button>
                     <button onClick={handleUndo}>回退</button>
                     <button onClick={handleClear}>清空</button>
+                    <button className="primary" onClick={handleDeployProcess}>部署流程</button>
+                    <button className="primary" onClick={handleStartProcess}>启动流程</button>
                     <div className="legend">LogicFlow Demo</div>
                 </div>
 
