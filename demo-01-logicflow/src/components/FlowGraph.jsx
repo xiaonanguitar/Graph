@@ -7,6 +7,7 @@ import {
   RectNodeModel,
   PolygonNode,
   PolygonNodeModel,
+  DiamondNode,  DiamondNodeModel,
   h,
 } from "@logicflow/core";
 import { PolylineEdge, PolylineEdgeModel } from '@logicflow/core';
@@ -208,23 +209,21 @@ class UserTaskNodeView extends RectNode {
 }
 
 // 自定义排他网关节点 - 菱形
-class ExclusiveGatewayModel extends PolygonNodeModel {
+class ExclusiveGatewayModel extends DiamondNodeModel {
   setAttributes() {
-    this.points = [
-      [40, 0],
-      [0, 40],
-      [-40, 0],
-      [0, -40]
-    ];
+    // 定义菱形的四个顶点，相对于中心点的坐标
+    // 这些坐标应该与BPMN中定义的bounds保持一致
+  // 左
+
     this.stroke = '#8b5cf6';
     this.fill = '#f3e8ff';
     
-    // 设置锚点偏移
+    // 设置锚点偏移，确保与图形顶点对齐
     this.anchorsOffset = [
-      [35, 0],     // 右侧
-      [-35, 0],    // 左侧
-      [0, -35],    // 顶部
-      [0, 35]      // 底部
+      [0, -18],   // 上锚点
+      [18, 0],    // 右锚点
+      [0, 18],    // 下锚点
+      [-18, 0]    // 左锚点
     ];
     
     // 安全地设置默认属性
@@ -241,12 +240,14 @@ class ExclusiveGatewayModel extends PolygonNodeModel {
   }
 }
 
-class ExclusiveGatewayView extends PolygonNode {
+class ExclusiveGatewayView extends DiamondNode {
   getShape() {
     const { x, y, width, height, points, fill, stroke, strokeWidth, properties } = this.props.model;
     const { title } = properties;
     
+    // 使用getAttributes获取正确的样式
     const style = this.props.model.s;
+    
     return h(
       'g',
       {},
@@ -255,7 +256,8 @@ class ExclusiveGatewayView extends PolygonNode {
           'polygon',
           {
             ...style,
-            points: points,
+            // 将points转换为字符串格式，符合polygon的points属性要求
+            points: points.map(p => `${p[0]},${p[1]}`).join(' '),
             fill,
             stroke,
             strokeWidth,
@@ -265,22 +267,22 @@ class ExclusiveGatewayView extends PolygonNode {
         h(
           'text',
           {
-            x,
-            y,
+            x: 0,
+            y: 0,
             textAnchor: 'middle',
             dominantBaseline: 'middle',
             fill: '#333',
             fontWeight: 'bold',
             fontSize: 14
           },
-          'X'
+          '×'
         ),
         // 添加标题
         h(
           'text',
           {
-            x,
-            y: y + 30,
+            x: 0,
+            y: 25,
             textAnchor: 'middle',
             dominantBaseline: 'middle',
             fill: '#333',
@@ -609,7 +611,7 @@ export default function FlowGraph() {
         <dc:Bounds height="80.0" width="100.0" x="180.0" y="125.0"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape bpmnElement="approvalGateway" id="BPMNShape_approvalGateway">
-        <dc:Bounds height="40.0" width="40.0" x="330.0" y="145.0"/>
+        <dc:Bounds height="60.0" width="60.0" x="320.0" y="135.0"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape bpmnElement="managerApprovalTask" id="BPMNShape_managerApprovalTask">
         <dc:Bounds height="80.0" width="100.0" x="200.0" y="250.0"/>
@@ -766,8 +768,8 @@ export default function FlowGraph() {
                         node.width = 60;
                         node.height = 60;
                     } else if(nodeType === 'exclusive-gateway') {
-                        node.width = 80;
-                        node.height = 80;
+                        // 对于排他网关，我们不需要显式设置宽高，因为其大小由points定义决定
+                        // 删除手动设置的宽高，让模型使用默认的points定义
                     } else {
                         node.width = 140;
                         node.height = 100;
